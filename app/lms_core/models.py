@@ -1,66 +1,63 @@
-from django.db import models
+import os
+import sys
+import csv
 from django.contrib.auth.models import User
+from lms_core.models import Course, CourseMember
 
-class Course(models.Model):
-    name = models.CharField("Nama Kursus", max_length=100)
-    description = models.TextField("Deskripsi")
-    price = models.IntegerField("Harga")
-    image = models.ImageField("Gambar", upload_to="courses", null=True)
-    teacher = models.ForeignKey(User, verbose_name="Pengajar", on_delete=models.RESTRICT)
-    created_at = models.DateTimeField("Dibuat pada", auto_now_add=True)
-    updated_at = models.DateTimeField("Diperbarui pada", auto_now=True)
+# Set up Django environment
+sys.path.append(os.path.abspath(os.path.join(__file__, *[os.pardir] * 2)))  # Adjust the path to your project structure
+os.environ['DJANGO_SETTINGS_MODULE'] = 'simplelms.settings'
+import django
+django.setup()
 
-    def __str__(self):
-        return self.name
+# Define base directory
+base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    class Meta:
-        verbose_name = "Kursus"
-        verbose_name_plural = "Data Kursus"
-        ordering = ['-created_at']
+# File paths
+user_data_path = os.path.join(base_dir, 'csv_data', 'user-data.csv')
+course_data_path = os.path.join(base_dir, 'csv_data', 'course-data.csv')
+member_data_path = os.path.join(base_dir, 'csv_data', 'member-data.csv')
 
-ROLE_OPTIONS = [('std', "Siswa"), ('ast', "Asisten")]
+# Import users
+with open(user_data_path) as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+        if not User.objects.filter(username=row['username']).exists():
+            User.objects.create_user(
+                username=row['username'],
+                password=row['password'],
+                email=row['email']
+            )
 
-class CourseMember(models.Model):
-    course = models.ForeignKey(Course, verbose_name="matkul", on_delete=models.RESTRICT)
-    user = models.ForeignKey(User, verbose_name="siswa", on_delete=models.RESTRICT)
-    roles = models.CharField("peran", max_length=3, choices=ROLE_OPTIONS, default='std')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+# Import courses
+with open(course_data_path) as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+        if not Course.objects.filter(name=row['name']).exists():  # Use name to avoid conflicts
+            try:
+                teacher = User.objects.get(pk=int(row['teacher']))
+                Course.objects.create(
+                    name=row['name'],
+                    description=row['description'],
+                    price=row['price'],
+                    teacher=teacher,
+                    # Assuming you may have an image field; provide a default or skip if necessary
+                    image=None  # Change to your logic to set the image if needed
+                )
+            except User.DoesNotExist:
+                print(f"Teacher with ID {row['teacher']} not found. Skipping course creation.")
 
-    class Meta:
-        verbose_name = "Subscriber Matkul"
-        verbose_name_plural = "Subscriber Matkul"
-
-    def __str__(self):
-        return f"{self.course.name} : {self.user.username}"
-
-class CourseContent(models.Model):
-    name = models.CharField("judul konten", max_length=200)
-    description = models.TextField("deskripsi", default='-')
-    video_url = models.CharField("URL Video", max_length=200, null=True, blank=True)
-    file_attachment = models.FileField("File", upload_to="course_content_files", null=True, blank=True)
-    course = models.ForeignKey(Course, verbose_name="matkul", on_delete=models.RESTRICT)
-    parent = models.ForeignKey("self", verbose_name="induk", on_delete=models.RESTRICT, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Konten Matkul"
-        verbose_name_plural = "Konten Matkul"
-
-    def __str__(self):
-        return f"[{self.course.name}] {self.name}"
-
-class Comment(models.Model):
-    content = models.ForeignKey(CourseContent, verbose_name="konten", on_delete=models.CASCADE)
-    member = models.ForeignKey(CourseMember, verbose_name="pengguna", on_delete=models.CASCADE)
-    comment = models.TextField("komentar")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Komentar"
-        verbose_name_plural = "Komentar"
-
-    def __str__(self):
-        return f"Komen: {self.content.name} - {self.member.user.username}"
+# Import course members
+with open(member_data_path) as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+        try:
+            course = Course.objects.get(pk=int(row['course_id']))
+            user = User.objects.get(pk=int(row['user_id']))
+            CourseMember.objects.create(
+                course=course,
+                user=user,
+                roles=row['roles']  # Ensure roles are valid based on the defined choices
+            )
+        except (Course.DoesNotExist, User.DoesNotExist) as e:
+            print(f"Error: {str(e)}. Skipping member creation.")

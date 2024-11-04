@@ -27,5 +27,5 @@ urlpatterns = [
     path('delete-data/', deleteData),
     path('', index),
 ]
-if settings.DEBUG:
-    urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+
+urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]

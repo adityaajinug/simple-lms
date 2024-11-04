@@ -1,38 +1,67 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(__file__, *[os.pardir] * 3)))
+import csv
+import logging
+from django.contrib.auth.models import User
+from lms_core.models import Course, CourseMember
+
+# Set up Django environment
+sys.path.append(os.path.abspath(os.path.join(__file__, *[os.pardir] * 2)))
 os.environ['DJANGO_SETTINGS_MODULE'] = 'simplelms.settings'
 import django
 django.setup()
 
-import csv
-from django.contrib.auth.models import User
-from core.models import Course, CourseMember
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-with open('./csv_data/user-data.csv') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for num, row in enumerate(reader):
-            if not User.objects.filter(username=row['username']).exists():
-                User.objects.create_user(
-					 id=num+2, username=row['username'], 
-					 password=row['password'], 
-					 email=row['email'])
-    
-with open('./csv_data/course-data.csv') as csvfile:
+# Define base directory
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# File paths
+user_data_path = os.path.join(base_dir, 'csv_data', 'user-data.csv')
+course_data_path = os.path.join(base_dir, 'csv_data', 'course-data.csv')
+member_data_path = os.path.join(base_dir, 'csv_data', 'member-data.csv')
+
+# Import users
+with open(user_data_path) as csvfile:
     reader = csv.DictReader(csvfile)
-    for num,row in enumerate(reader):           
-        if not Course.objects.filter(pk=num+1).exists():                        
-            Course.objects.create(
-					id=num+1, name=row['name'], 
-					description=row['description'], 
-					price=row['price'],
-					teacher=User.objects.get(pk=int(row['teacher'])))
-            
-with open('csv_data/member-data.csv') as csvfile:
+    for row in reader:
+        if not User.objects.filter(username=row['username']).exists():
+            User.objects.create_user(
+                username=row['username'],
+                password=row['password'],
+                email=row['email']
+            )
+
+# Import courses
+with open(course_data_path) as csvfile:
     reader = csv.DictReader(csvfile)
-    for num, row in enumerate(reader):
-        if not CourseMember.objects.filter(pk=num+1).exists():
-            CourseMember.objects.create(
-		            course_id=Course.objects.get(pk=int(row['course_id'])),
-					user_id=User.objects.get(pk=int(row['user_id'])),
-					id=num+1, roles=row['roles'])
+    for row in reader:
+        if not Course.objects.filter(pk=row['id']).exists():
+            try:
+                teacher = User.objects.get(pk=int(row['teacher']))
+                Course.objects.create(
+                    name=row['name'],
+                    description=row['description'],
+                    price=row['price'],
+                    teacher=teacher
+                )
+            except User.DoesNotExist:
+                logger.error(f"Teacher with ID {row['teacher']} not found. Skipping course creation.")
+
+# Import course members
+with open(member_data_path) as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+        if not CourseMember.objects.filter(pk=row['id']).exists():
+            try:
+                course = Course.objects.get(pk=int(row['course_id']))
+                user = User.objects.get(pk=int(row['user_id']))
+                CourseMember.objects.create(
+                    course=course,
+                    user=user,
+                    roles=row['roles']
+                )
+            except (Course.DoesNotExist, User.DoesNotExist) as e:
+                logger.error(f"Error: {str(e)}. Skipping member creation.")

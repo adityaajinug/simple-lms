@@ -24,7 +24,7 @@ SECRET_KEY = 'django-insecure-@f58qv32njeatjch$vk40@la@%fu89hn-+41v7n8^7d4!no_aj
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
+SILKY_PYTHON_PROFILER = True
 ALLOWED_HOSTS = []
 
 
