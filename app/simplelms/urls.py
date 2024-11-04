@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from lms_core.views import index, testing, addData, editData, deleteData
+from django.conf import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -26,4 +27,5 @@ urlpatterns = [
     path('delete-data/', deleteData),
     path('', index),
 ]
-urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+if settings.DEBUG:
+    urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
